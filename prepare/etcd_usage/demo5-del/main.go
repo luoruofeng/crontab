@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/mvcc/mvccpb"
 	"time"
 )
 
@@ -13,7 +14,8 @@ func main() {
 		client  *clientv3.Client
 		err     error
 		kv      clientv3.KV
-		getResp *clientv3.GetResponse
+		delResp *clientv3.DeleteResponse
+		kvpair  *mvccpb.KeyValue
 	)
 
 	config = clientv3.Config{
@@ -30,13 +32,16 @@ func main() {
 	// 用于读写etcd的键值对
 	kv = clientv3.NewKV(client)
 
-	// 写入另外一个Job
-	kv.Put(context.TODO(), "/cron/jobs/job2", "{...}")
-
-	// 读取/cron/jobs/为前缀的所有key
-	if getResp, err = kv.Get(context.TODO(), "/cron/jobs/", clientv3.WithPrefix()); err != nil {
+	// 删除KV
+	if delResp, err = kv.Delete(context.TODO(), "/cron/jobs/job1", clientv3.WithFromKey(), clientv3.WithLimit(2)); err != nil {
 		fmt.Println(err)
-	} else { // 获取成功, 我们遍历所有的kvs
-		fmt.Println(getResp.Kvs)
+		return
+	}
+
+	// 被删除之前的value是什么
+	if len(delResp.PrevKvs) != 0 {
+		for _, kvpair = range delResp.PrevKvs {
+			fmt.Println("删除了:", string(kvpair.Key), string(kvpair.Value))
+		}
 	}
 }
